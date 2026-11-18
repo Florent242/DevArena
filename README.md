@@ -1,17 +1,15 @@
-# DevArena
-
 # DevArena — Club Dev ESGIS Bénin
 
-DevArena est une plateforme de défis de programmation chronométrés avec classement en temps réel. Conçue pour la journée de lancement des clubs de l'ESGIS Bénin, elle permet aux étudiants de tester leurs compétences en code sur stand pendant que les scores s'affichent en direct sur vidéoprojecteur.
+DevArena est une plateforme open-source de défis de programmation chronométrés avec classement en temps réel. Conçue pour la journée de lancement des clubs de l'ESGIS Bénin, elle permet aux étudiants de tester leurs compétences sur stand pendant que les scores s'affichent en direct sur vidéoprojecteur.
 
 ## Fonctionnalités principales
 
 - **Arène Joueur (`/play`)** : Interface scindée avec consigne et chronomètre, éditeur de code intégré (coloration syntaxique) et prévisualisation en direct (`iframe` isolée).
-- **5 Niveaux progressifs** : Un parcours rapide (6 min 30 max) allant de l'affichage HTML de base jusqu'à l'algorithmique.
-- **Moteur de validation automatique** : Vérification instantanée du DOM, du style CSS et de la logique JavaScript du joueur.
-- **Projecteur Temps Réel (`/leaderboard`)** : Tableau des scores optimisé pour grand écran avec podium Top 3, classement par filière/promo et mise à jour instantanée via WebSockets.
+- **5 Niveaux progressifs** : Un parcours rapide (6 min 30 max) allant du HTML de base jusqu'à l'algorithmique.
+- **Validation côté serveur** : Vérification des réponses via Next.js Server Actions / API Routes pour empêcher la lecture des solutions dans le code client.
+- **Projecteur Temps Réel (`/leaderboard`)** : Tableau des scores optimisé pour grand écran avec podium Top 3, classement par filière et mise à jour instantanée.
 
-## Structure des 5 niveaux et scoring
+## Structure des niveaux et scoring
 
 | Niveau | Thème | Chrono | Points de base | Objectif |
 | :--- | :--- | :---: | :---: | :--- |
@@ -33,7 +31,7 @@ DevArena est une plateforme de défis de programmation chronométrés avec class
 - **Framework** : Next.js (App Router) & TypeScript
 - **Styling** : Tailwind CSS
 - **Éditeur de code** : `@uiw/react-codemirror`
-- **Base de données & Realtime** : Supabase (PostgreSQL + Realtime Subscriptions)
+- **Base de données & Realtime** : Supabase (PostgreSQL + Realtime)
 - **Hébergement** : Vercel
 
 ## Architecture du projet
@@ -42,17 +40,19 @@ DevArena est une plateforme de défis de programmation chronométrés avec class
 devarena/
 ├── src/
 │   ├── app/
+│   │   ├── api/validate/route.ts # Validation sécurisée des niveaux et mise à jour des scores
 │   │   ├── page.tsx              # Accueil et inscription (Pseudo + Filière)
 │   │   ├── play/page.tsx         # Arène de code (Éditeur + Preview + Chrono)
 │   │   └── leaderboard/page.tsx  # Écran vidéoprojecteur temps réel
 │   ├── components/
 │   │   ├── CodeEditor.tsx        # Wrapper CodeMirror
-│   │   ├── LivePreview.tsx       # Sandbox iframe + exécution des tests
-│   │   └── ScoreBoardTable.tsx   # Tableau animé du classement
+│   │   ├── LivePreview.tsx       # Sandbox iframe
+│   │   └── ScoreBoardTable.tsx   # Tableau du classement
 │   ├── lib/
-│   │   ├── levels.ts             # Définitions, codes initiaux et assertions des 5 niveaux
-│   │   └── supabase.ts           # Client Supabase
-└── .env.local                    # Variables d'environnement
+│   │   ├── levels.ts             # Énoncés et codes de départ publics
+│   │   └── supabase.ts           # Clients Supabase (public & admin serveur)
+├── .env.example                  # Modèle des variables d'environnement
+└── .gitignore                    # Exclusion des fichiers sensibles (.env.local)
 ```
 
 ## Installation en local
@@ -67,31 +67,39 @@ npm install
 
 ### 2. Configurer les variables d'environnement
 
-Crée un fichier `.env.local` à la racine du projet et renseigne tes clés Supabase :
+Copie le fichier `.env.example` vers `.env.local` et remplis tes clés Supabase (ne jamais commiter `.env.local`) :
+
+```bash
+cp .env.example .env.local
+```
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=[https://votre-projet.supabase.co](https://votre-projet.supabase.co)
 NEXT_PUBLIC_SUPABASE_ANON_KEY=votre-cle-publique-anon
+SUPABASE_SERVICE_ROLE_KEY=votre-cle-secrete-serveur
 ```
 
 ### 3. Configuration de la base de données (Supabase)
 
-Exécute cette requête SQL dans l'éditeur SQL de ton projet Supabase et active Realtime sur la table `scores` :
+Puisque ce dépôt est public, l'écriture directe dans la table `scores` depuis le navigateur est bloquée. Seule l'API serveur Next.js (via `SUPABASE_SERVICE_ROLE_KEY`) peut insérer ou modifier un score.
+
+Exécute cette requête dans l'éditeur SQL de Supabase et active Realtime sur la table `scores` :
 
 ```sql
 CREATE TABLE scores (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  pseudo TEXT NOT NULL,
+  pseudo TEXT NOT NULL CHECK (char_length(pseudo) BETWEEN 2 AND 20),
   filiere TEXT NOT NULL,
-  score INTEGER DEFAULT 0,
+  score INTEGER DEFAULT 0 CHECK (score >= 0 AND score <= 2000),
   current_level INTEGER DEFAULT 1,
   total_time_seconds INTEGER DEFAULT 0,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Activer la lecture/écriture publique pour l'événement
 ALTER TABLE scores ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public access" ON scores FOR ALL USING (true) WITH CHECK (true);
+
+-- Lecture publique autorisée pour le leaderboard, écriture bloquée côté client
+CREATE POLICY "Public read access" ON scores FOR SELECT USING (true);
 ```
 
 ### 4. Lancer le serveur de développement
@@ -100,17 +108,17 @@ CREATE POLICY "Public access" ON scores FOR ALL USING (true) WITH CHECK (true);
 npm run dev
 ```
 
-Ouvre `http://localhost:3000/play` pour tester le jeu et `http://localhost:3000/leaderboard` dans un second onglet pour vérifier la synchronisation en direct.
+Ouvre `http://localhost:3000/play` pour tester l'arène et `http://localhost:3000/leaderboard` dans un second onglet pour vérifier la synchronisation en direct.
 
-## Workflow Git pour l'équipe
+## Contribuer au projet
 
-1. Ne jamais pousser directement sur `main` (branche connectée à la production Vercel).
-2. Créer une branche par fonctionnalité :
+1. Forke le dépôt ou crée une branche dédiée depuis `main` :
    - `feat/player-ui`
    - `feat/validation-engine`
    - `feat/leaderboard-screen`
-3. Ouvrir une Pull Request vers `main` dès qu'un module est fonctionnel et testé.
+2. Assure-toi qu'aucune clé API ou fichier `.env` n'est inclus dans tes commits.
+3. Ouvre une Pull Request claire décrivant les modifications apportées.
 
----
+## Licence
 
-Club Dev — ESGIS Bénin
+Projet distribué sous licence MIT — Club Dev ESGIS Bénin.
