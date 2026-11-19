@@ -55,6 +55,11 @@ devarena/
 └── .gitignore                    # Exclusion des fichiers sensibles (.env.local)
 ```
 
+> **Moteur de validation (pôle 2)** : les règles de correction, le calcul des
+> points et les tests cachés sont documentés dans
+> [`docs/validation-engine.md`](docs/validation-engine.md). Lancer `npm test`
+> pour vérifier les 5 niveaux et le barème.
+
 ## Installation en local
 
 ### 1. Cloner le dépôt et installer les dépendances
