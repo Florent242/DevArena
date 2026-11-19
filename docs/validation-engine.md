@@ -1,7 +1,7 @@
-# Moteur de validation & scoring — Pôle 2
+# Moteur de validation & scoring
 
 Ce module valide le code d'un joueur **côté serveur** et calcule les points du
-niveau. Il ne contient aucune interface : il est consommé par l'écran joueur
+niveau.I est consommé
 via `POST /api/validate` et par le leaderboard via les helpers de classement.
 
 ## Fichiers
